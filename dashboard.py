@@ -105,30 +105,41 @@ with tab2:
 
 # --- TAB 3 : GESTION DES SITES ---
 with tab3:
-    st.subheader("Ajouter une nouvelle plateforme instantanément")
+    st.subheader("Ajouter ou configurer une plateforme")
     
-    with st.form("add_site_auto_form"):
+    with st.form("add_site_form"):
         nom_site = st.text_input("Nom de la plateforme à ajouter", placeholder="Ex: Tutti, Ricardo, Anibis...")
         
-        if st.form_submit_button("🔍 Trouver et Activer le site"):
+        # AJOUT DE L'OPTION MANUELLE
+        saisie_manuelle = st.checkbox("✍️ Entrer l'URL manuellement (sans utiliser l'IA)")
+        url_manuelle = st.text_input("URL cible (uniquement si case cochée ci-dessus)", placeholder="https://...")
+        
+        if st.form_submit_button("💾 Enregistrer la plateforme"):
             if nom_site:
-                with st.spinner(f"Gemini cherche le flux réseau pour '{nom_site}'..."):
-                    url_detectee = trouver_url_api_via_ia(nom_site)
-                    
-                if url_detectee:
+                url_finale = None
+                
+                if saisie_manuelle:
+                    if url_manuelle.startswith("http"):
+                        url_finale = url_manuelle.strip()
+                    else:
+                        st.error("⚠️ L'URL manuelle doit commencer par http:// ou https://")
+                else:
+                    with st.spinner(f"Gemini cherche le flux réseau pour '{nom_site}'..."):
+                        url_finale = trouver_url_api_via_ia(nom_site)
+                
+                if url_finale:
                     try:
                         supabase.table("config_sites").insert({
                             "nom_site": nom_site.capitalize().strip(),
-                            "url_cible": url_detectee,
+                            "url_cible": url_finale,
                             "actif": True
                         }).execute()
-                        st.success(f"🎉 Configuration réussie ! '{nom_site}' a été trouvé et ajouté automatiquement.")
-                        st.info(f"🔗 URL configurée en tâche de fond : `{url_detectee}`")
+                        st.success(f"🎉 Plateforme '{nom_site}' configurée avec succès !")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erreur lors de l'enregistrement dans la base : {e}")
                 else:
-                    st.error("Impossible de configurer ce site automatiquement. Vérifie le nom.")
+                    st.error("Impossible de déterminer l'URL de cette plateforme.")
             else:
                 st.warning("Veuillez écrire un nom de site.")
 
@@ -142,10 +153,19 @@ with tab3:
         else:
             for s in sites.data:
                 with st.expander(f"🌐 {s['nom_site']}"):
-                    st.write(f"**URL auto-détectée :** `{s['url_cible']}`")
+                    st.write(f"**URL configurée :** `{s['url_cible']}`")
                     status = "ACTIF" if s['actif'] else "DÉSACTIVÉ"
                     st.write(f"**Statut :** {status}")
                     
+                    # SECTION EDITION DE L'URL DANS L'ACCORDÉON
+                    nouvelle_url = st.text_input("Modifier l'URL de ce site :", value=s['url_cible'], key=f"edit_url_{s['id']}")
+                    if nouvelle_url != s['url_cible']:
+                        if st.button("💾 Enregistrer la modification", key=f"save_url_{s['id']}"):
+                            supabase.table("config_sites").update({"url_cible": nouvelle_url.strip()}).eq("id", s['id']).execute()
+                            st.success("URL mise à jour !")
+                            st.rerun()
+                    
+                    st.markdown("<br>", unsafe_allow_code=True)
                     col_act, col_supp = st.columns([1, 1])
                     
                     label_bouton = "Désactiver" if s['actif'] else "Activer"
