@@ -165,7 +165,7 @@ with tab3:
                             st.success("URL mise à jour !")
                             st.rerun()
                     
-                    st.markdown("<br>", unsafe_allow_code=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
                     col_act, col_supp = st.columns([1, 1])
                     
                     label_bouton = "Désactiver" if s['actif'] else "Activer"
