@@ -50,10 +50,15 @@ def chasser_les_nouveautes():
     pianos_deja_vus = charger_memoire()
     nouveaux_pianos = []
     
+    # EN-TÊTES ULTRA-COMPLETS POUR ÉVITER LE CODE 403
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "fr-CH,fr;q=0.9"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "fr-CH,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "max-age=0",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
     }
 
     # 3. Boucle sur les plateformes
@@ -73,7 +78,7 @@ def chasser_les_nouveautes():
             
             # --- CAS TRAITEMENT FLUX RSS (ANIBIS) ---
             if "rss" in url or "feeds" in url:
-                # Extraction basique et ultra-rapide des balises <item> du RSS sans bibliothèque externe
+                # Extraction des balises <item> du RSS
                 items = re.findall(r'<item>(.*?)</item>', reponse.text, re.DOTALL)
                 
                 for item in items:
@@ -82,7 +87,7 @@ def chasser_les_nouveautes():
                     
                     lien = re.search(r'<link>(.*?)</link>', item).group(1).strip()
                     
-                    # On extrait l'ID unique de l'annonce depuis l'URL d'Anibis
+                    # Extraction de l'ID unique de l'annonce depuis l'URL
                     id_match = re.search(r'-(\d+)\??', lien)
                     id_annonce = id_match.group(1) if id_match else lien
                     
