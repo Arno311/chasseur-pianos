@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import re  # Ajouté pour extraire facilement les infos du flux RSS
 from telegram_bot import envoyer_alerte
 from database import supabase
 
@@ -30,7 +31,7 @@ def chasser_les_nouveautes():
         print(f"❌ Erreur de liaison Supabase (mots-clés) : {e}")
         return
 
-    # 2. Récupération des sites ajoutés manuellement sur le Dashboard
+    # 2. Récupération des sites
     try:
         res_sites = supabase.table("config_sites").select("*").eq("actif", True).execute()
         sites_a_scanner = res_sites.data if res_sites.data else []
@@ -38,73 +39,92 @@ def chasser_les_nouveautes():
         print(f"❌ Erreur de liaison Supabase (sites) : {e}")
         return
 
-    # Si tu n'as encore rien ajouté sur le Dashboard, on coupe proprement
     if not sites_a_scanner:
-        print("📭 Aucun site n'a encore été ajouté manuellement sur le Dashboard. En attente de configuration...")
+        print("📭 Aucun site configuré. En attente...")
         return
 
     if not mots_cles:
-        print("🔍 Aucun mot-clé configuré sur le Dashboard (ex: 'piano'). En attente...")
+        print("🔍 Aucun mot-clé configuré. En attente...")
         return
 
     pianos_deja_vus = charger_memoire()
     nouveaux_pianos = []
     
-    # En-têtes optimisés pour simuler un vrai navigateur suisse
     headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "fr-CH,fr;q=0.9,en;q=0.8",
-        "Connection": "close"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-CH,fr;q=0.9"
     }
 
-    # 3. Boucle sur les plateformes que TU as ajoutées
+    # 3. Boucle sur les plateformes
     for site in sites_a_scanner:
         url = site['url_cible'].strip()
         if not url.startswith("http"):
-            print(f"⚠️ L'URL pour {site['nom_site']} semble incorrecte ou mal copiée.")
+            print(f"⚠️ L'URL pour {site['nom_site']} semble incorrecte.")
             continue
 
         print(f"🌐 Connexion au flux manuel : {site['nom_site']}...")
         
         try:
-            reponse = requests.get(url, headers=headers, timeout=10)
+            reponse = requests.get(url, headers=headers, timeout=15)
             if reponse.status_code != 200:
                 print(f"⚠️ {site['nom_site']} indisponible (Code HTTP {reponse.status_code})")
                 continue
-                
-            donnees = reponse.json()
-            annonces = donnees.get("entries", donnees.get("items", donnees.get("articles", [])))
             
-            if not annonces:
-                continue
-
-            for index, item in enumerate(annonces):
-                id_annonce = str(item.get("id", f"{site['nom_site']}_{index}"))
-                titre = item.get("title", item.get("titre", "Sans titre"))
-                description = item.get("description", item.get("body", ""))
-                texte_complet = f"{titre} {description}".lower()
+            # --- CAS TRAITEMENT FLUX RSS (ANIBIS) ---
+            if "rss" in url or "feeds" in url:
+                # Extraction basique et ultra-rapide des balises <item> du RSS sans bibliothèque externe
+                items = re.findall(r'<item>(.*?)</item>', reponse.text, re.DOTALL)
                 
-                if any(mot in texte_complet for mot in mots_cles):
-                    if id_annonce not in pianos_deja_vus:
-                        url_complete = url
-                        if "anibis.ch" in url:
-                            url_complete = f"https://www.anibis.ch/fr/d/instruments-de-musique/{id_annonce}"
-                        elif "tutti.ch" in url:
-                            url_complete = f"https://www.tutti.ch/fr/vi/{id_annonce}"
-                        elif "ricardo.ch" in url:
-                            url_complete = f"https://www.ricardo.ch/fr/a/{id_annonce}"
+                for item in items:
+                    titre = re.search(r'<title><!\[CDATA\[(.*?)\]\]></title>', item)
+                    titre = titre.group(1) if titre else re.search(r'<title>(.*?)</title>', item).group(1)
+                    
+                    lien = re.search(r'<link>(.*?)</link>', item).group(1).strip()
+                    
+                    # On extrait l'ID unique de l'annonce depuis l'URL d'Anibis
+                    id_match = re.search(r'-(\d+)\??', lien)
+                    id_annonce = id_match.group(1) if id_match else lien
+                    
+                    texte_complet = titre.lower()
+                    
+                    if any(mot in texte_complet for mot in mots_cles):
+                        if id_annonce not in pianos_deja_vus:
+                            nouveaux_pianos.append({
+                                "titre": titre,
+                                "url": lien,
+                                "id": id_annonce
+                            })
+            
+            # --- CAS TRAITEMENT JSON TRADITIONNEL (AUTRES) ---
+            else:
+                donnees = reponse.json()
+                annonces = donnees.get("entries", donnees.get("items", donnees.get("articles", [])))
+                
+                for index, item in enumerate(annonces):
+                    id_annonce = str(item.get("id", f"{site['nom_site']}_{index}"))
+                    titre = item.get("title", item.get("titre", "Sans titre"))
+                    description = item.get("description", item.get("body", ""))
+                    texte_complet = f"{titre} {description}".lower()
+                    
+                    if any(mot in texte_complet for mot in mots_cles):
+                        if id_annonce not in pianos_deja_vus:
+                            url_complete = url
+                            if "tutti.ch" in url:
+                                url_complete = f"https://www.tutti.ch/fr/vi/{id_annonce}"
+                            elif "ricardo.ch" in url:
+                                url_complete = f"https://www.ricardo.ch/fr/a/{id_annonce}"
 
-                        nouveaux_pianos.append({
-                            "titre": titre,
-                            "url": url_complete,
-                            "id": id_annonce
-                        })
-                        
+                            nouveaux_pianos.append({
+                                "titre": titre,
+                                "url": url_complete,
+                                "id": id_annonce
+                            })
+                                
         except Exception as e:
             print(f"⚠️ Impossible de scanner {site['nom_site']} : {e}")
 
-    # 4. Envoi
+    # 4. Envoi des alertes Telegram
     if nouveaux_pianos:
         print(f"🔥 {len(nouveaux_pianos)} opportunité(s) détectée(s) !")
         rapport = "🎹 *[NOUVEAU] Alertes du Chasseur !*\n\n"
