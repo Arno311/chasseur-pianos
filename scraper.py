@@ -147,3 +147,9 @@ def chasser_les_nouveautes():
         sauvegarder_memoire(pianos_deja_vus)
     else:
         print("📭 RAS : Rien de neuf sur tes plateformes.")
+
+
+if __name__ == "__main__":
+    print("--- Démarrage du Chasseur de Pianos ---")
+    chasser_les_nouveautes()
+    print("--- Fin du scan ---")
