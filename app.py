@@ -1,7 +1,9 @@
 import os
 import time
+import sys
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from scraper import chasser_les_nouveautes
 
 # --- 1. SERVEUR WEB FANTÔME POUR CONTOURNER LA LIMITE RENDER ---
 class SimpleServer(BaseHTTPRequestHandler):
@@ -20,27 +22,34 @@ def run_web_server():
     print(f"🌍 Serveur fantôme connecté sur le port {port}")
     server.serve_forever()
 
-# --- 2. TON CODE DE CHASSE ET DE SCRAPING ---
+# --- 2. TON VRAI CODE DE CHASSE AUTOMATIQUE ---
+TEMPS_ATTENTE = 60  # Augmenté à 60s pour la stabilité sur le Cloud
+
 def boucle_principale():
-    print("🤖 DÉMARRAGE DU CHASSEUR AUTOMATIQUE DE PIANOS")
+    print("🚀 DÉMARRAGE DU CHASSEUR AUTOMATIQUE DE PIANOS")
+    print("= = = = = = = = = = = = = = = = = = = = = = = = =")
+    print(f"Le robot va analyser tes sites toutes les {TEMPS_ATTENTE} secondes.\n")
+    
+    compteur_tours = 0
     
     while True:
+        compteur_tours += 1
+        print(f"\n🔄 Passage n°{compteur_tours} à la loupe...")
+        
         try:
-            print("🔄 Passage à la loupe des sites de petites annonces...")
-            
-            # Ton scraper va s'exécuter ici en tâche de fond.
-            # Laisse tourner une vérification toutes les 60 secondes sur le cloud
-            time.sleep(60)
-            
+            # ICI SE LANCE TA VRAIE RECHERCHE
+            chasser_les_nouveautes()
         except Exception as e:
-            print(f"❌ Erreur dans la boucle : {e}")
-            time.sleep(30)
+            print(f"⚠️ Une erreur inattendue est survenue : {e}")
+            
+        print(f"💤 En attente pendant {TEMPS_ATTENTE} secondes...")
+        time.sleep(TEMPS_ATTENTE)
 
 # --- 3. DÉMARRAGE SYNCHRONISÉ ---
 if __name__ == "__main__":
-    # Lance le serveur web sur un fil d'attente secondaire (Render passe au vert)
+    # 1. On lance le serveur web pour que Render passe au vert ("Live")
     web_thread = threading.Thread(target=run_web_server, daemon=True)
     web_thread.start()
 
-    # Lance ta vraie boucle principale de recherche
+    # 2. On lance ta vraie recherche de pianos
     boucle_principale()
